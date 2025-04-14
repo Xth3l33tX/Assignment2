@@ -1,0 +1,197 @@
+---
+title: "Reproducible research with <span style='color:blue; text-decoration: underline;'>RMarkdown</span>"
+author: "Alen Lovric"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document: default
+  pdf_document: default
+subtitle: DEG analysis with DESeq2
+params:
+  data_file: ./data/counts.txt
+  metadata_file: ./data/metadata.txt
+  condition_column: condition
+  covariate: patient
+  control_group: C
+  treatment_group: 'N'
+  alpha: 0.2
+  lfc_threshold: 0
+  output_dir: ./results
+  plot_volcano: yes
+  top_genes: 20
+---
+
+<!-- This code chunk sets global options for all code chunks in the RMarkdown document using `knitr::opts_chunk$set()`. Here, `echo = TRUE` is applied as the default, so code in all chunks will be displayed in the output unless individually overridden. Setting `echo = TRUE` helps readers see the code behind each result. The chunk itself has `echo=FALSE`, so this setup line won’t be printed in the final document. -->
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+<!-- This CSS code is used to customize the appearance of the document's title, subtitle, author, date, and code chunks. Here's a breakdown of each style:
+
+- **Title (`h1.title`)**: Centers the title text with a larger font size (38px) and removes extra spacing below the title.
+- **Subtitle (`h3.subtitle`)**: Centers the subtitle text, adjusts its font size to 28px, and slightly reduces the space above it.
+- **Author (`h4.author`)**: Centers the author’s name with a smaller font size (18px).
+- **Date (`h4.date`)**: Centers the date with an 18px font size and adds more space below it to separate it from the following content.
+
+This chunk uses `echo=FALSE` to prevent the CSS code from being printed in the document. These styles only affect the appearance in HTML outputs. -->
+
+```{css, echo=FALSE}
+h1.title {
+  font-size: 38px;
+  text-align: center;
+  margin-top: 55px;
+  margin-bottom: 25px;
+}
+h3.subtitle {
+  font-size: 28px;
+  text-align: center;
+  margin-top: 2px;
+}
+h4.author {
+  font-size: 18px;
+  text-align: center;
+}
+h4.date {
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 100px;
+}
+```
+
+
+#### Dependencies
+
+Pipeline depends on the following packages: 'tidyverse', 'DESeq2', 'DT' and 'ggrepel'. NOTE - in order to run Rmarkdown each package needs to be already installed in you R for pipeline to work.
+
+
+```{r setup, cache=TRUE}
+# Load required libraries
+library(pacman)
+library(DESeq2)
+p_load('tidyverse', 'DT', 'ggrepel')
+```
+<br>
+<br>
+
+#### 1. Load the Data
+In this stage, we prepare the count matrix and metadata files. The count matrix contains raw gene expression counts across different samples, while the metadata file includes essential information such as sample identifiers, conditions, and covariates. Properly formatted input files are crucial for the subsequent analysis steps.
+
+
+```{r data, cache=TRUE}
+# Load count matrix and metadata
+counts <- read.delim(params$data_file)
+metadata <- read.delim(params$metadata_file)
+
+# Ensure metadata has row names matching samples
+if (!all(colnames(counts) == rownames(metadata))) stop("Sample names don't match!!!")
+```
+<br>
+<br>
+
+#### 2. Preprocess and Setup DESeq2
+Normalization is performed to account for systematic biases and technical variations across samples. We utilize methods like the DESeq2's normalization procedure, which applies a size factor to each sample based on the geometric mean of counts, ensuring that the data is comparable across samples.
+
+
+```{r DEA prep, tidy=TRUE, tidy.opts=list(width.cutoff=65), warning=FALSE, cache=TRUE}
+# Convert condition column to a factor
+metadata[[params$condition_column]] <- factor(metadata[[params$condition_column]], 
+                                              levels = c(params$control_group, params$treatment_group))
+
+# Create DESeqDataSet
+dds <- DESeqDataSetFromMatrix(countData = counts,
+                              colData = metadata,
+                              design = if (!is.null(params$covariate)) {
+  as.formula(paste("~", params$covariate, "+", params$condition_column))
+  } else {
+  as.formula(paste("~", params$condition_column))
+})
+```
+<br>
+<br>
+
+#### 3. Differential Expression Analysis
+In this phase, we identify differential expressed genes (DEGs) between the specified conditions. Using the DESeq2 package, we fit a generalized linear model to the count data and perform statistical tests to estimate the log2 fold change and adjusted p-values for each gene. This step highlights genes that exhibit significant changes in expression related to the conditions under study.
+
+NOTE: Following steps are just for the purpose of this exercise. For more detailed examples and more comprehensive overview of DEA refer to [DESeq2 vignette](https://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#indfilt).
+
+```{r DEA analysis, message=FALSE, warning=FALSE, cache=TRUE}
+# Run DEA
+dds <- DESeq(dds)
+
+# Get results with specified thresholds
+res <- results(dds, alpha = params$alpha, lfcThreshold = params$lfc_threshold)
+
+# Order results by p-value
+res <- res[order(res$padj), ]
+res <- na.omit(res)
+
+# Save results to file
+write.csv(as.data.frame(res), file = file.path(params$output_dir, "DEG_results.csv"))
+```
+<br>
+<br>
+
+#### 4. Results Table
+The results table presents the differential expressed genes (DEGs) identified through our analysis. Each row in the table corresponds to a specific gene, providing key metrics such as the gene name, base mean expression, log2 fold change, p-value and adjusted p-value.
+
+
+```{r table, cache=T}
+# Display the table with modified search functionality and a box around it
+datatable(
+  res %>% as.data.frame(.) %>% 
+    tibble::rownames_to_column(var = 'ensembl') %>%
+    tibble::remove_rownames() %>% 
+    mutate_if(is.numeric, function(x) round(x, 3)),
+  options = list(
+    pageLength = 100,       # Number of rows to display per page
+    scrollX = TRUE,         # Enable horizontal scrolling
+    scrollY = "350px",      # Set table height
+    autoWidth = FALSE,
+    dom = '<"dt-header"f>t<"dt-footer"lip>'  # Custom layout: search box first, then entries dropdown
+  ),
+  rownames = FALSE
+) %>%
+  htmlwidgets::onRender("
+    function(el) {
+      $(el).css({
+        'border': '2px solid #ccc',
+        'border-radius': '5px',
+        'overflow': 'hidden',  // to avoid overflow from rounded corners
+        'margin-top': '50px',  // Space above the table
+        'margin-bottom': '20px' // Space below the table
+      });
+    }
+  ")
+```   
+<br>
+<br>
+
+#### 5. Volcano Plot
+Results visualization is essential for interpreting the findings. We generate various plots, including volcano plots to visualize the relationship between fold change and significance, and heatmaps for visualizing the expression patterns of DEGs. These visualizations help in understanding the biological significance of the results and in communicating the findings effectively.
+
+
+```{r volcano, fig.asp=.95, fig.height=15, fig.align='center', cache=TRUE}
+if (params$plot_volcano) {
+  res_df <- as.data.frame(res) %>%
+    mutate(sig = case_when(padj < params$alpha & log2FoldChange > params$lfc_threshold ~ "Up", 
+                           padj < params$alpha & log2FoldChange < params$lfc_threshold ~ "Down",
+                           TRUE ~ "No"))
+  
+  top_genes <- head(res, n = params$top_genes)
+
+  ggplot(res_df, aes(x = log2FoldChange, y = -log10(padj), color = sig)) +
+    geom_point(alpha = 0.7) +
+    geom_text_repel(data = top_genes, aes(label = rownames(top_genes)), 
+                    color = 'black', size = 2, max.overlaps = Inf) +
+    scale_color_manual(values = c("No" = "grey", "Up" = "red", 'Down' = 'blue')) +
+    labs(title = "Volcano Plot", x = "Log2 Fold Change", y = "-Log10 Adjusted p-value") +
+    theme_bw() + 
+    theme(legend.position = 'none',
+          panel.grid = element_blank())
+
+  # Convert ggplot to plotly for interactivity
+  # ggplotly(p)
+}
+```
+
+
