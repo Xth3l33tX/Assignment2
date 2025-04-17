@@ -12,6 +12,23 @@
 #loading libraries
 library(magick)
 
+#Main function
+
+Image_filter <- function(image, filter){
+  img <- image_read(image)
+  bitmap <- img[[1]]
+
+  obj <-  apply_filter_to_bitmap(bitmap, filter)
+  image_read(obj)
+
+}
+
+#' @name grey
+#' @title Greyscale
+#' @description Code to make greyscale
+#' @param rgb_vec Placeholder
+#' @return Function
+#' @export
 
 # Convert a raw RGB vector to grayscale
 grey <- function(rgb_vec) {
@@ -22,11 +39,25 @@ grey <- function(rgb_vec) {
   rep(grey_val, 3)
 }
 
+#' @name red
+#' @title Red image
+#' @description Code to make red image
+#' @param rgb_vec Placeholder
+#' @return Function
+#' @export
+
 # Red filter
 red <- function(rgb_vec) {
   r <- rgb_vec[1]
   c(r, as.raw(0), as.raw(0))
 }
+
+#' @name green
+#' @title Green image
+#' @description Code to make green image
+#' @param rgb_vec Placeholder
+#' @return Function
+#' @export
 
 # Green filter
 green <- function(rgb_vec) {
@@ -34,11 +65,25 @@ green <- function(rgb_vec) {
   c(as.raw(0), g, as.raw(0))
 }
 
+#' @name blue
+#' @title Blue image
+#' @description Code to make blue image
+#' @param rgb_vec Placeholder
+#' @return Function
+#' @export
+
 # Blue filter
 blue <- function(rgb_vec) {
   b <- rgb_vec[3]
   c(as.raw(0), as.raw(0), b)
 }
+
+#' @name magenta
+#' @title Magenta image
+#' @description Code to make magenta image
+#' @param rgb_vec Placeholder
+#' @return Function
+#' @export
 
 # Replace pixel color with black or magenta based on greyscale cutoff
 magenta <- function(rgb_vec, cutoff = 128) {
@@ -54,6 +99,13 @@ magenta <- function(rgb_vec, cutoff = 128) {
   }
 }
 
+#' @name binary_threshold_filter
+#' @title Binary filter
+#' @description Code to make binary filter
+#' @param rgb_vec Placeholder
+#' @param cutoff Cutoff for binary filter
+#' @return Raw
+#' @export
 
 # Binary threshold color filter
 binary_threshold_filter <- function(rgb_vec, cutoff = 127) {
@@ -68,6 +120,14 @@ binary_threshold_filter <- function(rgb_vec, cutoff = 127) {
   }
 }
 
+#' @name apply_filter_to_bitmap
+#' @title Bitmap filter
+#' @description Code to make the bitmap filter
+#' @param bitmap Bitmap created
+#' @param filter_finc One of the filter functions
+#' @return Bitmap
+#' @export
+
 # Apply a filter function to an entire image bitmap
 apply_filter_to_bitmap <- function(bitmap, filter_func) {
   dims <- dim(bitmap)
@@ -79,14 +139,3 @@ apply_filter_to_bitmap <- function(bitmap, filter_func) {
   }
   return(bitmap)
 }
-
-Image_filter <- function(image, filter){
-  img <- image_read(image)
-  bitmap <- img[[1]]
-
-obj <-  apply_filter_to_bitmap(bitmap, filter)
-image_read(obj)
-
-}
-
-
