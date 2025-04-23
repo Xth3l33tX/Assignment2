@@ -1,0 +1,320 @@
+---
+title: "Intermediate R"
+subtitle: 'Data wrangling with Tidyverse'
+author: "Love"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: html_document
+---
+
+# You will need functions from tidyverse package for this exercise to work.
+
+```{r}
+library(tidyverse)
+```
+
+
+### Question 1:
+
+**The** *list.files()* **function in R is used to list the files in a specified directory. It offers several arguments that allow you to customize its behavior, such as filtering file types, searching subdirectories, and excluding certain files.**
+
+```{r}
+# Use list.files() function to extract the paths of all CSV files from the folder "timeseries_data" and its subfolders.
+
+# Your code here
+files_list <- list.files(path="./Assignment_5", pattern ='csv', full.names = TRUE, recursive = T)
+files_list
+
+```
+
+
+### Question 2:
+
+**The** *map()* **function is part of the purrr package in R. It applies a function to each element of a vector or list and returns the results as a list. It is particularly useful for iteration and functional programming.**
+
+```{r}
+# Use map() function together with files_list from the previous step to read each CSV file into a list of data frames.
+
+# Your code here
+data_list <- map(files_list, ~ read_csv(.))
+data_list
+
+```
+
+
+### Question 3:
+
+**The** *set_names()* **function is from the purrr package and is used to assign or modify the names of a vector, list, or other R objects.**
+**The** *str_remove()* **function is part of the stringr package, which simplifies string manipulation in R. It removes patterns (defined by regular expressions) from a string.**
+**The** *basename()* **function is a base R function that extracts the file name from a file path, removing the directory path.**
+
+```{r}
+# Use set_names(), str_remove() and basename() functions to to assign meaningful names for each data frame in the list. Use corresponding file names stored in the "files_list" object to achieve this while omitting CSV extension.
+# Print head of data frames in a list and see what happens.
+
+# Your code here
+data_list_named <-  data_list %>% set_names(str_remove(basename(files_list), "\\.csv"))
+map(data_list_named, ~head(.x, 5))
+
+```
+
+
+### Question 4:
+
+**The** *bind_rows()* **function is part of the dplyr package. It is used to combine multiple data frames by row. This function is particularly useful when dealing with datasets with the same or overlapping columns.**
+
+```{r}
+# Use bind_rows() function to combine the list of data frames into a single data frame.
+
+# Your code here
+combined_df <- bind_rows(data_list_named)
+combined_df
+
+```
+
+
+### Question 5:
+
+**The** *mutate()* **function is part of the dplyr package and is used to create new columns or modify existing ones in a data frame. It is one of the most versatile functions for data manipulation in the tidyverse ecosystem.**
+
+```{r}
+# Use mutate() function to convert 'Date' column to Date format.
+
+# Your code here
+combined_df <- combined_df %>%
+  mutate(Date = as.Date(Date))
+combined_df
+
+# Double check if class is correct
+str(combined_df)
+```
+
+
+### Question 6:
+
+**The** *group_by()* **and** *summarise()* **functions are part of the dplyr package. Together, they allow you to group data by specific variables and compute summary statistics for each group. These functions are widely used for exploratory data analysis and aggregation tasks.**
+
+```{r}
+# Use group_by() and summarise() functions to calculate the number of missing values for each Category.
+
+# Your code here
+combined_df %>%
+  group_by(Category) %>% 
+  summarise(n_missing = sum(is.na(Value)))
+
+```
+
+
+### Question 7:
+
+```{r}
+# Use group_by() and summarize() functions to find the mean 'Value' for each 'Date'.
+
+# Your code here
+combined_df %>%
+  group_by(Date) %>%
+  summarise(Mean_Value = mean(Value))
+```
+
+
+### Question 8:
+
+**The** *case_when()* **function in R, part of the dplyr package, allows you to perform vectorized conditional operations, similar to a series of** *ifelse()* **statements but in a more readable and efficient way.**
+
+```{r}
+# Use mutate() and case_when() function to change NAs with median 'Date' value. 
+# Create a new column 'Month' by extracting the month from the 'Date' column.
+
+# Your code here
+imputed_df <- combined_df %>%
+  group_by(Date) %>% 
+  mutate(Value = case_when(is.na(Value) ~ median(Value, na.rm = T),
+                           TRUE ~ Value)) %>% 
+  mutate(Month = months(Date))
+imputed_df
+
+```
+
+
+### Question 9:
+
+**The** *pivot_wider()* **function is part of the tidyr package and is used to reshape data from long format to wide format. In long format, each row is an observation, while in wide format, different variables or measurements are spread across multiple columns. This transformation is useful for data analysis and visualization when a wide format is needed.**
+
+```{r}
+# Use pivot_wider() function to reshape the data, keeping "Date" and "Month" as row identifiers, and spreading the groups within "Category" column into separate columns.
+
+# Your code here
+wide_df <- imputed_df %>%
+  group_by(Month) %>% 
+  pivot_wider(names_from = Category, values_from = Value)
+wide_df
+
+```
+
+
+### Question 10:
+
+**The** *c_across()* **function in R is part of the dplyr package and is used within** *mutate()* **or** *summarize()* **to apply a function across a range of columns in a row-wise manner.**
+
+```{r}
+# Use the c_across() function with columns A to C and calculate the median for each row in the wide_df data frame. The resulting data frame will be used for plotting later on.
+
+# Your code here
+mdn_df <- wide_df %>%
+  ungroup() %>% 
+  group_by(Date) %>% 
+  mutate(Mdn_value = median(c_across(A:C), na.rm = T))
+mdn_df
+
+```
+
+
+### Question 11:
+
+**The** *filter()* **function is used to select rows from a data frame that meet certain conditions. It's part of the dplyr package and is typically used for subsetting data based on logical conditions.**
+**The** *slice()* **function is used to select rows by position (not conditionally). It's useful when you want to pick specific rows based on their indices.**
+**The** *which.min()* **function returns the index of the first minimum value in a vector or column. It's useful when you need to know where the smallest value is located in your data.**
+
+```{r}
+# Use filter() functions to select rows only fo the Month of 'June'. 
+# Remove min and max values of each Category. Try using slice() function for this step. 
+# Think about how could you double check your code
+
+# Your code here
+filtered_june <- imputed_df %>%
+  filter(Month == 'June') %>% 
+  group_by(Category) %>% 
+  slice(-c(which.min(Value), which.max(Value)))
+filtered_june
+
+```
+
+
+### Question 12:
+
+**The** *slice_head()* **function from the dplyr package is used to select the first few rows of a data frame or tibble, based on a specified number or percentage. It's particularly useful when you want to quickly extract a subset of the top rows from a dataset.**
+
+```{r}
+# Use variation of slice function, slice_head() to get the top 10 rows of the "filtered_june" data frame and round the "Value" column with 2 decimal points.
+
+# Your code here
+top_10_rows <- filtered_june %>%
+  slice_head(n = 10) %>% 
+  mutate(Value = round(Value, 2))
+top_10_rows
+
+```
+
+
+### Question 13:
+
+```{r}
+# Use case_when() function and following cutoffs to adjust labels in column "Category".
+# A >= 51
+# 45.1 < B < 51
+# C <= 45.1 
+
+# Your code here
+recode_df <- top_10_rows %>%
+  mutate(Category = case_when(Value >= 51 ~ 'A',
+                              Value < 51 & Value > 45.1 ~ 'B',
+                              TRUE ~ 'C'))
+recode_df
+
+```
+
+
+### Question 14:
+
+```{r}
+# Use proper slice_() function to see the last 3 rows of "recode_df".
+
+# Your code here
+last_3_rows <- recode_df %>%
+  slice_tail(n = 3)
+last_3_rows
+
+```
+
+
+### Question 15:
+
+**The** *bind_cols()* **function is from the dplyr package and combines multiple data frames, tibbles, or vectors column-wise (i.e., by adding columns side by side).**
+**The** *map_dfc()* **function is from the purrr package and is used to apply a function to each element of a list (or vector), then bind the results column-wise. The _dfc suffix stands for "data frame column" and indicates the output will be combined into a tibble with columns.**
+**The** *map2_dfc()* **function from purrr applies a function to two lists (or vectors) in parallel and binds the results column-wise into a tibble. The _dfc suffix again indicates column-wise binding.**
+
+```{r}
+# Assume you have a list of functions you want to apply to each "Category" in "top_10_rows" data frame.
+# Define 3 functions in the new object "functions_list". Let say you want to transform  each "Category" using three different techniques: log2, mean/sd, and median/range.
+# Reshape the data frame making each unique "Category" a separate column.
+# Use map2_dfc() function to apply each transformation defined in functions_list to the A:C columns.
+# Choose appropriate rename_() function to add '_raw' suffix to the original A:C columns.
+
+# Your code here
+functions_list <- list(log2, 
+                       function(x) (x - mean(x, na.rm = T))/sd(x, na.rm = T),
+                       function(x) (x - median(x, na.rm = T))/range(x, na.rm = T))
+
+processed_df <- top_10_rows %>% 
+  pivot_wider(names_from = 'Category', values_from = 'Value') 
+  
+
+processed_df <- processed_df %>% 
+  bind_cols(., map2_dfc(functions_list, c('log2', '(x-mean)/sd', '(x-median)/range'), function(func, abbr) {
+                map_dfc(processed_df %>% select(A:C), ~ func(.)) %>% 
+                  setNames(paste0(colnames(processed_df %>% select(A:C)), "_", abbr))
+}))
+
+processed_df <- processed_df %>%
+  rename_at(vars(A:C), ~paste0(., '_raw'))
+
+processed_df
+
+```
+
+
+### Question 16:
+
+**The** *ggplot()* **function initializes a plot in ggplot2. It specifies the data and the aesthetic mappings (e.g., which variables map to x and y axes, colors, shapes, etc.).**
+**The** *facet_wrap()* **function creates small multiples (faceted plots) by splitting the data into subsets based on the values of a variable.**
+**The** *labs()* **function is used to customize plot labels such as the title, x-axis, y-axis, caption, and legend titles.**
+**The** *theme()* **function is used to customize the appearance of a ggplot, such as text size, font, colors, grid lines, legend placement, and more.**
+
+```{r}
+# Use mdf_df" data frame and ggplot2() function to create a line plot of "Mdn_value" for each "Date" in "mdf_df" data frame. 
+# Take advantage of facet_wrap() function to visualize subsets of "mdf_df" data frame based on the "Month". 
+
+# Your code here
+ggplot(mdn_df, aes(x = Date, y = Mdn_value, color = Month)) +
+  geom_line() +
+  facet_wrap(~Month, ncol = 1, scales = 'free_x') +
+  labs(title = "Average Value Over 6 Months",
+       x = "",
+       y = "Average") +
+  theme(legend.position = 'none')
+
+```
+
+
+### Question 17:
+
+**The** *separate()* **function in the tidyr package is used to split a single column into multiple columns based on a separator (e.g., a space, comma, or other delimiter).**
+
+```{r}
+# Here, we will combine data wrangling together with ggplot() function without assigning transformed data into a new object.
+# Start by transforming "processed_df" data frame from wide to long format by excluding 'Date' and 'Month' columns.
+# Split newly created 'Name' column into two separate columns, 'Category' and 'Type', using the underscore ('_') as the separator.
+# Use ggplot2() function and transformed "processed_df" data frame to create a box-plot of normalized 'Value-s' across different 'Categories', and grouped in different facets by 'Type'.
+
+# Your code here
+processed_df %>% 
+  pivot_longer(cols = -c(Date, Month), names_to = 'Name', values_to = 'Value') %>% 
+  separate(Name, into = c('Category', 'Type'), sep = "_", remove = F) %>% 
+  ggplot(., aes(x = Category, y = Value, fill = Category)) +
+  geom_boxplot() +
+  facet_wrap(~Type, scales = 'free_y') +
+  labs(x = "",
+       y = "Value") +
+  theme(legend.position = 'none')
+
+```
+
